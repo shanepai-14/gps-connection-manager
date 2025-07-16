@@ -27,35 +27,3 @@ class SocketPoolException extends \Exception
         $this->context = $context;
     }
 }
-
-/**
- * Connection Exception - for connection-related errors
- */
-class ConnectionException extends SocketPoolException
-{
-    //
-}
-
-/**
- * Pool Exception - for pool management errors
- */
-class PoolException extends SocketPoolException
-{
-    //
-}
-
-/**
- * Configuration Exception - for configuration errors
- */
-class ConfigurationException extends SocketPoolException
-{
-    //
-}
-
-/**
- * Timeout Exception - for timeout-related errors
- */
-class TimeoutException extends SocketPoolException
-{
-    //
-}
