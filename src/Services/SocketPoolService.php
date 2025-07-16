@@ -401,7 +401,7 @@ class SocketPoolService
         return $socket;
     }
 
-    private function createSocket(string $host, int $port)
+    private function createSocket(string $host, int $port): \Socket
     {
         $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         if (!$socket) {
@@ -415,10 +415,22 @@ class SocketPoolService
 
         $retries = 0;
         while ($retries < $this->config['max_retries']) {
+            // Use blocking connection instead of non-blocking
             if (socket_connect($socket, $host, $port)) {
                 $this->logger->debug("Connected to server", ['host' => $host, 'port' => $port]);
                 return $socket;
             }
+            
+            $error = socket_last_error($socket);
+            
+            // Handle "Operation already in progress" error
+            if ($error === 114) { // EALREADY
+                // Wait a bit and try again
+                usleep(200000); // 200ms
+                $retries++;
+                continue;
+            }
+            
             $retries++;
             if ($retries < $this->config['max_retries']) {
                 usleep(100000); // 100ms delay between retries
@@ -429,7 +441,7 @@ class SocketPoolService
         throw new ConnectionException("Could not connect to $host:$port after {$this->config['max_retries']} attempts");
     }
 
-    private function sendMessage($socket, string $message, string $vehicleId): array
+    private function sendMessage(\Socket $socket, string $message, string $vehicleId): array
     {
         $formattedMessage = $message . "\r";
         $bytesWritten = socket_write($socket, $formattedMessage, strlen($formattedMessage));
@@ -609,20 +621,18 @@ public function shutdown(): void
 }
 
     // Include remaining methods from the original service...
-    private function isSocketAlive($socket): bool
+    private function isSocketAlive(\Socket $socket): bool
     {
-        if (!is_resource($socket)) {
+        // Check if socket is still connected
+        $sockError = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+        if ($sockError !== 0) {
             return false;
         }
-
-        $read = [$socket];
-        $write = null;
-        $except = null;
-        $result = socket_select($read, $write, $except, 0);
         
+        // Try a quick write test (empty string)
+        $result = @socket_write($socket, '', 0);
         return $result !== false;
     }
-
     private function removeFromPool(string $host, int $port): void
     {
         $key = $host . ':' . $port;
