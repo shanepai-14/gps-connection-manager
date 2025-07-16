@@ -1,0 +1,8 @@
+
+ [INFO] Starting Socket Pool Service...                                         
+
+ [INFO] Starting service in foreground mode...                                  
+
+[2025-07-16 08:42:54] socket_pool.INFO: Unix socket initialized {"path":"/tmp/socket_pool_service.sock"}
+[2025-07-16 08:42:54] socket_pool.INFO: Socket Pool Service initialized {"instance_id":"169e2408-e0d0-4316-b5b6-261d1265b47c","config":{"max_pool_size":100,"connection_timeout":30,"max_retries":3,"unix_socket_path":"/tmp/socket_pool_service.sock","log_level":"INFO","log_file":"/home/athena/gps-connection-manager/src/Services/../../logs/socket_pool_service.log","redis_enabled":false,"redis_host":"127.0.0.1","redis_port":6379,"redis_password":null,"metrics_enabled":true,"health_check_interval":60}}
+[2025-07-16 08:42:54] socket_pool.INFO: Socket Pool Service started {"instance_id":"169e2408-e0d0-4316-b5b6-261d1265b47c"}

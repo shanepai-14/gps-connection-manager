@@ -69,7 +69,7 @@ class SocketPoolService
             'max_retries' => (int) ($_ENV['SOCKET_POOL_MAX_RETRIES'] ?? 3),
             'unix_socket_path' => $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/tmp/socket_pool_service.sock',
             'log_level' => $_ENV['SOCKET_POOL_LOG_LEVEL'] ?? 'INFO',
-            'log_file' => $_ENV['SOCKET_POOL_LOG_FILE'] ?? __DIR__ . '/../../logs/socket_pool_service.log',
+            'log_file' => $_ENV['SOCKET_POOL_LOG_FILE'] ?? '/var/log/socket_pool_service.log',
             'redis_enabled' => filter_var($_ENV['SOCKET_POOL_REDIS_ENABLED'] ?? 'false', FILTER_VALIDATE_BOOLEAN),
             'redis_host' => $_ENV['REDIS_HOST'] ?? '127.0.0.1',
             'redis_port' => (int) ($_ENV['REDIS_PORT'] ?? 6379),
