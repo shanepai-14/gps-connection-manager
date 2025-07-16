@@ -408,10 +408,18 @@ class SocketPoolService
             throw new ConnectionException("Could not create socket: " . socket_strerror(socket_last_error()));
         }
 
+        $this->logger->debug("Connecting to ", ['host' => $host, 'port' => $port]);
         // Set socket options
-        socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, ["sec" => 2, "usec" => 0]);
-        socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, ["sec" => 2, "usec" => 0]);
+        socket_set_option($socket, SOL_SOCKET, SO_REUSEADDR, 1);
+        socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
         socket_set_option($socket, SOL_SOCKET, SO_KEEPALIVE, 1);
+
+           socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, [
+            "sec" => $this->config['connection_timeout'], "usec" => 0
+        ]);
+        socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, [
+            "sec" => $this->config['connection_timeout'], "usec" => 0
+        ]);
 
         $retries = 0;
         while ($retries < $this->config['max_retries']) {
