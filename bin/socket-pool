@@ -1,0 +1,54 @@
+#!/usr/bin/env php
+<?php
+
+// bin/socket-pool
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Symfony\Component\Console\Application;
+use SocketPool\Console\StartCommand;
+use SocketPool\Console\StopCommand;
+use SocketPool\Console\RestartCommand;
+use SocketPool\Console\StatusCommand;
+use SocketPool\Console\StatsCommand;
+use SocketPool\Console\HealthCommand;
+use SocketPool\Console\InstallCommand;
+use SocketPool\Console\ConfigCommand;
+use SocketPool\Console\TestCommand;
+use SocketPool\Console\MonitorCommand;
+use SocketPool\Console\BackupCommand;
+use SocketPool\Console\ClearCacheCommand;
+use SocketPool\Console\PoolCommand;
+
+try {
+    $application = new Application('Socket Pool Service', '1.0.0');
+    
+    // Register all commands
+    $application->addCommands([
+        new StartCommand(),
+        new StopCommand(),
+        new RestartCommand(),
+        new StatusCommand(),
+        new StatsCommand(),
+        new HealthCommand(),
+        new InstallCommand(),
+        new ConfigCommand(),
+        new TestCommand(),
+        new MonitorCommand(),
+        new BackupCommand(),
+        new ClearCacheCommand(),
+        new PoolCommand(),
+    ]);
+
+    // Set default command
+    $application->setDefaultCommand('status');
+
+    // Run the application
+    $application->run();
+    
+} catch (\Exception $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+    exit(1);
+}
