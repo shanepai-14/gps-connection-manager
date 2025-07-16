@@ -8,12 +8,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Helper\Table;
-use Symfony\Component\Console\Helper\ProgressBar;
-use SocketPool\Services\SocketPoolService;
-use SocketPool\Client\SocketPoolClient;
 
 class StatusCommand extends Command
 {
@@ -60,47 +56,17 @@ class StatusCommand extends Command
                 }
             }
             
-            // Try to get service health
+            // Try to test socket connection directly
             try {
-                $client = new SocketPoolClient();
-                $health = $client->performHealthCheck();
-                
-                $io->section('Service Health');
-                if ($health['success']) {
-                    $io->success('Service is healthy');
-                    if (isset($health['data']['checks'])) {
-                        $healthTable = new Table($output);
-                        $healthTable->setHeaders(['Check', 'Status']);
-                        $checks = [];
-                        foreach ($health['data']['checks'] as $check => $status) {
-                            $checks[] = [$check, $this->formatHealthStatus($status)];
-                        }
-                        $healthTable->setRows($checks);
-                        $healthTable->render();
-                    }
+                $socketStatus = $this->testSocketHealthDirect();
+                $io->section('Socket Health');
+                if ($socketStatus['success']) {
+                    $io->success('Socket is responding: ' . $socketStatus['message']);
                 } else {
-                    $io->error('Service health check failed: ' . ($health['error'] ?? 'Unknown error'));
+                    $io->error('Socket not responding: ' . $socketStatus['error']);
                 }
-                
-                // Show service info if detailed
-                if ($input->getOption('detailed')) {
-                    $serviceInfo = $client->getServiceInfo();
-                    if ($serviceInfo['success']) {
-                        $io->section('Service Information');
-                        $infoTable = new Table($output);
-                        $infoTable->setHeaders(['Property', 'Value']);
-                        $infoTable->setRows([
-                            ['Version', $serviceInfo['version'] ?? 'N/A'],
-                            ['Instance ID', substr($serviceInfo['instance_id'] ?? 'N/A', 0, 8) . '...'],
-                            ['Uptime', $this->formatUptime($serviceInfo['uptime'] ?? 0)],
-                            ['Pool Size', $serviceInfo['pool_size'] ?? 'N/A']
-                        ]);
-                        $infoTable->render();
-                    }
-                }
-                
             } catch (\Exception $e) {
-                $io->warning('Could not perform health check: ' . $e->getMessage());
+                $io->warning('Could not test socket connection: ' . $e->getMessage());
             }
             
             return Command::SUCCESS;
@@ -169,6 +135,61 @@ class StatusCommand extends Command
     }
 
     /**
+     * Test socket connection directly without SocketPoolClient
+     */
+    private function testSocketHealthDirect(): array
+    {
+        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/tmp/socket_pool_service.sock';
+        
+        try {
+            $socket = socket_create(AF_UNIX, SOCK_STREAM, 0);
+            if (!$socket) {
+                throw new \Exception("Failed to create socket: " . socket_strerror(socket_last_error()));
+            }
+            
+            socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, ["sec" => 3, "usec" => 0]);
+            socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, ["sec" => 3, "usec" => 0]);
+            
+            if (!socket_connect($socket, $socketPath)) {
+                throw new \Exception("Failed to connect to socket: " . socket_strerror(socket_last_error()));
+            }
+            
+            // Send health check request
+            $request = json_encode(['action' => 'health_check']);
+            $bytesWritten = socket_write($socket, $request, strlen($request));
+            
+            if ($bytesWritten === false) {
+                throw new \Exception("Failed to write to socket: " . socket_strerror(socket_last_error()));
+            }
+            
+            // Read response
+            $response = socket_read($socket, 1024);
+            if ($response === false) {
+                throw new \Exception("Failed to read from socket: " . socket_strerror(socket_last_error()));
+            }
+            
+            socket_close($socket);
+            
+            $data = json_decode($response, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception("Invalid JSON response: " . json_last_error_msg());
+            }
+            
+            return [
+                'success' => true,
+                'message' => $data['message'] ?? 'Health check passed',
+                'data' => $data
+            ];
+            
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Test if socket connection is working
      */
     private function testSocketConnection(string $socketPath): bool
@@ -183,17 +204,8 @@ class StatusCommand extends Command
             socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, ["sec" => 2, "usec" => 0]);
             
             if (socket_connect($socket, $socketPath)) {
-                // Send a simple health check
-                $request = json_encode(['action' => 'health_check']);
-                socket_write($socket, $request, strlen($request));
-                
-                $response = socket_read($socket, 1024);
                 socket_close($socket);
-                
-                if ($response) {
-                    $data = json_decode($response, true);
-                    return $data && isset($data['success']);
-                }
+                return true;
             }
             
             socket_close($socket);
@@ -242,7 +254,9 @@ class StatusCommand extends Command
         if (file_exists($socketPath)) {
             $io->text("✓ Socket file exists: $socketPath");
             $perms = substr(sprintf('%o', fileperms($socketPath)), -4);
-            $io->text("  Permissions: $perms");
+            $owner = posix_getpwuid(fileowner($socketPath))['name'] ?? 'unknown';
+            $group = posix_getgrgid(filegroup($socketPath))['name'] ?? 'unknown';
+            $io->text("  Permissions: $perms (owner: $owner, group: $group)");
         } else {
             $io->text("✗ Socket file missing: $socketPath");
         }
@@ -256,7 +270,7 @@ class StatusCommand extends Command
         }
         
         // Check PHP extensions
-        $extensions = ['sockets', 'pcntl', 'json'];
+        $extensions = ['sockets', 'pcntl', 'json', 'posix'];
         foreach ($extensions as $ext) {
             if (extension_loaded($ext)) {
                 $io->text("✓ PHP extension '$ext' loaded");
@@ -265,7 +279,7 @@ class StatusCommand extends Command
             }
         }
         
-        // Check if service directory exists
+        // Check service directory
         $serviceDir = dirname(__DIR__, 2);
         if (is_dir($serviceDir)) {
             $io->text("✓ Service directory exists: $serviceDir");
@@ -273,8 +287,19 @@ class StatusCommand extends Command
             $io->text("✗ Service directory missing: $serviceDir");
         }
         
+        // Check log files
+        $logFile = $_ENV['SOCKET_POOL_LOG_FILE'] ?? 'logs/socket_pool_service.log';
+        if (file_exists($logFile)) {
+            $io->text("✓ Log file exists: $logFile");
+            $size = filesize($logFile);
+            $io->text("  Size: " . number_format($size) . " bytes");
+        } else {
+            $io->text("✗ Log file missing: $logFile");
+        }
+        
         $io->newLine();
         $io->text("To start the service, run: ./bin/socket-pool start");
+        $io->text("To view logs, run: tail -f $logFile");
     }
 
     private function getProcessInfo(int $pid): ?array
@@ -297,69 +322,33 @@ class StatusCommand extends Command
         $uptimeFile = '/proc/uptime';
         if (file_exists($uptimeFile)) {
             $uptime = (float) explode(' ', file_get_contents($uptimeFile))[0];
-            $starttime = (int)($parts[21] ?? 0) / 100;
-           $info['start_time'] = date('Y-m-d H:i:s', (int)(time() - $uptime + $starttime));
-        } else {
-            $info['start_time'] = 'N/A';
+            $starttime = (int)($parts[21] ?? 0) / 100; // Convert from jiffies to seconds
+            $processUptime = $uptime - $starttime;
+            $info['start_time'] = date('Y-m-d H:i:s', (int)(time() - $uptime + $starttime));
         }
         
-        // Get memory info
+        // Get CPU and memory info from /proc/[pid]/status
         if (file_exists($statusFile)) {
             $status = file_get_contents($statusFile);
-            if (preg_match('/VmRSS:\s+(\d+)\s+kB/', $status, $matches)) {
-                $info['memory'] = round($matches[1] / 1024, 2) . ' MB';
-            } else {
-                $info['memory'] = 'N/A';
+            preg_match('/VmRSS:\s+(\d+)\s+kB/', $status, $matches);
+            if ($matches) {
+                $memoryKB = (int) $matches[1];
+                $info['memory'] = number_format($memoryKB / 1024, 2) . ' MB';
             }
-            
-            // Get user info
-            if (preg_match('/Uid:\s+(\d+)/', $status, $matches)) {
-                $userInfo = posix_getpwuid((int)$matches[1]);
-                $info['user'] = $userInfo['name'] ?? 'N/A';
-            }
-        } else {
-            $info['memory'] = 'N/A';
         }
         
         // Get command line
         if (file_exists($cmdlineFile)) {
             $cmdline = file_get_contents($cmdlineFile);
-            $info['command'] = str_replace("\0", ' ', trim($cmdline));
+            $info['command'] = str_replace("\0", ' ', $cmdline);
         }
         
-        $info['cpu'] = 'N/A'; // Would need more calculation for real-time CPU
+        // Get user
+        $info['user'] = posix_getpwuid(fileowner("/proc/$pid"))['name'] ?? 'N/A';
+        
+        // CPU usage would require sampling, so we'll skip it for now
+        $info['cpu'] = 'N/A';
         
         return $info;
-    }
-
-    private function formatHealthStatus(string $status): string
-    {
-        return match($status) {
-            'ok' => '<fg=green>✓ OK</>',
-            'failed' => '<fg=red>✗ Failed</>',
-            'degraded' => '<fg=yellow>⚠ Degraded</>',
-            default => $status
-        };
-    }
-
-    private function formatUptime(int $seconds): string
-    {
-        $units = [
-            'day' => 86400,
-            'hour' => 3600,
-            'minute' => 60,
-            'second' => 1
-        ];
-        
-        $parts = [];
-        foreach ($units as $name => $divisor) {
-            $quot = intval($seconds / $divisor);
-            if ($quot) {
-                $parts[] = $quot . ' ' . $name . ($quot > 1 ? 's' : '');
-                $seconds %= $divisor;
-            }
-        }
-        
-        return empty($parts) ? '0 seconds' : implode(', ', $parts);
     }
 }
