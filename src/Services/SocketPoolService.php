@@ -139,7 +139,19 @@ class SocketPoolService
     {
         // Remove existing socket file if it exists
         if (file_exists($this->unixSocketPath)) {
-            unlink($this->unixSocketPath);
+            if (!unlink($this->unixSocketPath)) {
+                // If normal unlink fails, try different approaches
+                $this->logger->warning("Failed to remove existing socket file, trying alternative methods");
+                
+                // Try to change permissions first
+                @chmod($this->unixSocketPath, 0666);
+                
+                if (!@unlink($this->unixSocketPath)) {
+                    // If still fails, try to use different socket path
+                    $this->unixSocketPath = '/tmp/socket_pool_service_' . getmypid() . '.sock';
+                    $this->logger->warning("Using alternative socket path: " . $this->unixSocketPath);
+                }
+            }
         }
 
         // Create Unix domain socket for Laravel communication
@@ -148,8 +160,23 @@ class SocketPoolService
             throw new SocketPoolException("Failed to create Unix socket: " . socket_strerror(socket_last_error()));
         }
 
+        // Set socket options before binding
+        socket_set_option($this->unixSocket, SOL_SOCKET, SO_REUSEADDR, 1);
+
         if (!socket_bind($this->unixSocket, $this->unixSocketPath)) {
-            throw new SocketPoolException("Failed to bind Unix socket: " . socket_strerror(socket_last_error()));
+            $error = socket_strerror(socket_last_error());
+            
+            // If bind fails, try alternative socket path
+            if (strpos($error, 'Address already in use') !== false) {
+                $this->unixSocketPath = '/tmp/socket_pool_service_' . getmypid() . '.sock';
+                $this->logger->warning("Address in use, trying alternative path: " . $this->unixSocketPath);
+                
+                if (!socket_bind($this->unixSocket, $this->unixSocketPath)) {
+                    throw new SocketPoolException("Failed to bind Unix socket: " . socket_strerror(socket_last_error()));
+                }
+            } else {
+                throw new SocketPoolException("Failed to bind Unix socket: " . $error);
+            }
         }
 
         if (!socket_listen($this->unixSocket, 5)) {
@@ -157,7 +184,7 @@ class SocketPoolService
         }
 
         // Set socket permissions
-        chmod($this->unixSocketPath, 0666);
+        @chmod($this->unixSocketPath, 0666);
         $this->logger->info("Unix socket initialized", ['path' => $this->unixSocketPath]);
     }
 
