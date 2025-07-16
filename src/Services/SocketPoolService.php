@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SocketPool\Services;
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
