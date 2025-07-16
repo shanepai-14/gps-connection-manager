@@ -102,7 +102,7 @@ class StatusCommand extends Command
         }
         
         // Method 2: Check for socket file and try to connect
-        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/tmp/socket_pool_service.sock';
+        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/var/run/socket_pool_service.sock';
         if (file_exists($socketPath)) {
             // Try to connect to the socket
             if ($this->testSocketConnection($socketPath)) {
@@ -139,7 +139,7 @@ class StatusCommand extends Command
      */
     private function testSocketHealthDirect(): array
     {
-        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/tmp/socket_pool_service.sock';
+        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/var/run/socket_pool_service.sock';
         
         try {
             $socket = socket_create(AF_UNIX, SOCK_STREAM, 0);
@@ -248,7 +248,7 @@ class StatusCommand extends Command
     {
         $io->section('Diagnostics');
         
-        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/tmp/socket_pool_service.sock';
+        $socketPath = $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/var/run/socket_pool_service.sock';
         
         // Check socket file
         if (file_exists($socketPath)) {
