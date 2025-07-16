@@ -12,8 +12,8 @@ use Monolog\Handler\RotatingFileHandler;
 use Monolog\Formatter\LineFormatter;
 use Predis\Client as RedisClient;
 use Ramsey\Uuid\Uuid;
-use src\Exceptions\SocketPoolException;
-use src\Exceptions\ConnectionException;
+use SocketPool\Exceptions\SocketPoolException;
+use SocketPool\Exceptions\ConnectionException;
 use Dotenv\Dotenv;
 
 /**

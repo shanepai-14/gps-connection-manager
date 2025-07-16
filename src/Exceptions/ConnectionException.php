@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace src\Exceptions;
+namespace SocketPool\Exceptions;
 
-use src\Exceptions\SocketPoolException;
+use SocketPool\Exceptions\SocketPoolException;
 
 class ConnectionException extends SocketPoolException
 {

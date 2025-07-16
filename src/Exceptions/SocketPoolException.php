@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace src\Exceptions;
+namespace SocketPool\Exceptions;
 
 /**
  * Base Socket Pool Exception
