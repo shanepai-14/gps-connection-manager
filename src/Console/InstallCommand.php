@@ -8,12 +8,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Console\Helper\Table;
-use Symfony\Component\Console\Helper\ProgressBar;
-use SocketPool\Services\SocketPoolService;
-use SocketPool\Client\SocketPoolClient;
 
 class InstallCommand extends Command
 {
@@ -106,8 +101,7 @@ class InstallCommand extends Command
     {
         $directories = [
             "$servicePath/logs" => '755',
-            '/var/run/socket-pool' => '755',
-            '/etc/socket-pool' => '755'
+            '/var/run/socket-pool' => '755', // Keep this for future use
         ];
         
         foreach ($directories as $dir => $permissions) {
@@ -206,7 +200,6 @@ EOF;
 
     private function generateSystemdService(string $servicePath, string $user, string $group): string
     {
-        $pidFile = '/var/run/socket-pool/socket-pool.pid';
         $socketPoolBinary = $servicePath . '/bin/socket-pool';
         
         return <<<EOF
@@ -227,6 +220,8 @@ EnvironmentFile=-$servicePath/.env
 ExecStartPre=/bin/rm -f /var/run/socket_pool_service.sock
 ExecStartPre=/bin/mkdir -p /var/run/socket-pool $servicePath/logs
 ExecStartPre=/bin/chown $user:$group /var/run/socket-pool $servicePath/logs
+ExecStartPre=/bin/touch /var/run/socket_pool_service.sock
+ExecStartPre=/bin/chown $user:$group /var/run/socket_pool_service.sock
 ExecStart=/usr/bin/php $socketPoolBinary start
 ExecStop=/bin/kill -TERM \$MAINPID
 
@@ -272,115 +267,24 @@ SOCKET_POOL_CONNECTION_TTL=300
 # Service paths (using project directory)
 SOCKET_POOL_UNIX_PATH=/var/run/socket_pool_service.sock
 SOCKET_POOL_LOG_FILE=$servicePath/logs/socket_pool_service.log
-SOCKET_POOL_PID_FILE=/var/run/socket-pool/socket-pool.pid
 
-# =============================================================================
-# LOGGING CONFIGURATION
-# =============================================================================
-
-# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Logging configuration
 SOCKET_POOL_LOG_LEVEL=INFO
-SOCKET_POOL_LOG_FORMAT=json
-SOCKET_POOL_LOG_MAX_FILES=30
-SOCKET_POOL_SLOW_QUERY_LOG=true
-SOCKET_POOL_SLOW_QUERY_THRESHOLD=1000
 
-# =============================================================================
-# REDIS CONFIGURATION (OPTIONAL)
-# =============================================================================
-
-# Enable Redis for caching, metrics, and circuit breaker
+# Redis configuration (optional)
 SOCKET_POOL_REDIS_ENABLED=false
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DATABASE=0
-REDIS_TIMEOUT=5
+SOCKET_POOL_REDIS_HOST=127.0.0.1
+SOCKET_POOL_REDIS_PORT=6379
+SOCKET_POOL_REDIS_PASSWORD=
 
-# =============================================================================
-# PERFORMANCE AND MONITORING
-# =============================================================================
-
-# Metrics and health monitoring
+# Metrics and monitoring
 SOCKET_POOL_METRICS_ENABLED=true
-SOCKET_POOL_HEALTH_INTERVAL=60
-SOCKET_POOL_STATS_RETENTION=3600
+SOCKET_POOL_HEALTH_CHECK_INTERVAL=60
 
-# Circuit breaker configuration
-SOCKET_POOL_CIRCUIT_BREAKER=true
-SOCKET_POOL_CB_THRESHOLD=5
-SOCKET_POOL_CB_TIMEOUT=60
-SOCKET_POOL_CB_HALF_OPEN_MAX_CALLS=3
-
-# Connection management
-SOCKET_POOL_CLEANUP_INTERVAL=30
-SOCKET_POOL_IDLE_TIMEOUT=300
-SOCKET_POOL_MAX_IDLE_TIME=600
-
-# =============================================================================
-# CLIENT CONFIGURATION
-# =============================================================================
-
-# Client-side settings
-SOCKET_POOL_CLIENT_TIMEOUT=5
-SOCKET_POOL_CLIENT_RETRIES=3
-SOCKET_POOL_CLIENT_RETRY_DELAY=100
-SOCKET_POOL_CACHE_ENABLED=true
-SOCKET_POOL_CACHE_TTL=300
-
-# =============================================================================
-# SECURITY CONFIGURATION
-# =============================================================================
-
-# Authentication (if enabled)
-SOCKET_POOL_AUTH_ENABLED=false
-SOCKET_POOL_AUTH_TOKEN=
-SOCKET_POOL_SSL_ENABLED=false
-SOCKET_POOL_SSL_CERT_PATH=
-SOCKET_POOL_SSL_KEY_PATH=
-
-# =============================================================================
-# ADVANCED CONFIGURATION
-# =============================================================================
-
-# Memory and resource management
-SOCKET_POOL_MEMORY_LIMIT=256M
-SOCKET_POOL_GC_ENABLED=true
-SOCKET_POOL_GC_INTERVAL=300
-SOCKET_POOL_MAX_EXECUTION_TIME=0
-
-# Worker processes (if using multi-process mode)
-SOCKET_POOL_WORKER_PROCESSES=1
-SOCKET_POOL_MAX_REQUESTS_PER_CHILD=1000
-
-# Development and debugging
-SOCKET_POOL_DEBUG=false
-SOCKET_POOL_PROFILE=false
-SOCKET_POOL_XDEBUG_ENABLED=false
-
-# =============================================================================
-# ALERTS AND NOTIFICATIONS
-# =============================================================================
-
-# Email alerts (optional)
-SOCKET_POOL_ALERT_EMAIL_ENABLED=false
-SOCKET_POOL_ALERT_EMAIL=
-SOCKET_POOL_SMTP_HOST=
-SOCKET_POOL_SMTP_PORT=587
-SOCKET_POOL_SMTP_USER=
-SOCKET_POOL_SMTP_PASS=
-
-# Webhook notifications (optional)
-SOCKET_POOL_WEBHOOK_ENABLED=false
-SOCKET_POOL_WEBHOOK_URL=
-SOCKET_POOL_WEBHOOK_TOKEN=
-
-# =============================================================================
-# CUSTOM CONFIGURATION
-# =============================================================================
-
-# Add your custom environment variables below
-# CUSTOM_VARIABLE=value
+# Advanced configuration
+SOCKET_POOL_MAX_CONNECTIONS_PER_HOST=10
+SOCKET_POOL_CLEANUP_INTERVAL=300
+SOCKET_POOL_SOCKET_REUSE=true
 EOF;
     }
 }
