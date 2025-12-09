@@ -724,7 +724,24 @@ public function shutdown(): void
 
     private function sendResponse($socket, array $response): void
     {
+        if (!$socket instanceof \Socket) {
+            return;
+        }
+
         $json = json_encode($response);
-        socket_write($socket, $json, strlen($json));
+        if ($json === false) {
+            $this->logger->warning('Failed to encode response to JSON', ['response' => $response]);
+            return;
+        }
+
+        $bytesWritten = @socket_write($socket, $json, strlen($json));
+        if ($bytesWritten === false) {
+            $errorCode = socket_last_error($socket);
+            $this->logger->warning('Failed to write response to client socket', [
+                'error_code' => $errorCode,
+                'error' => socket_strerror($errorCode),
+                'response' => $response
+            ]);
+        }
     }
 }
