@@ -212,16 +212,17 @@ Type=simple
 User=$user
 Group=$group
 WorkingDirectory=$servicePath
+PermissionsStartOnly=true
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EnvironmentFile=-/etc/default/socket-pool
 EnvironmentFile=-$servicePath/.env
 
 # Service execution
-ExecStartPre=/bin/rm -f /var/run/socket_pool_service.sock
+ExecStartPre=/bin/rm -f /var/run/socket-pool/socket_pool_service.sock
 ExecStartPre=/bin/mkdir -p /var/run/socket-pool $servicePath/logs
 ExecStartPre=/bin/chown $user:$group /var/run/socket-pool $servicePath/logs
-ExecStartPre=/bin/touch /var/run/socket_pool_service.sock
-ExecStartPre=/bin/chown $user:$group /var/run/socket_pool_service.sock
+ExecStartPre=/bin/touch /var/run/socket-pool/socket_pool_service.sock
+ExecStartPre=/bin/chown $user:$group /var/run/socket-pool/socket_pool_service.sock
 ExecStart=/usr/bin/php $socketPoolBinary start
 ExecStop=/bin/kill -TERM \$MAINPID
 
@@ -265,7 +266,7 @@ SOCKET_POOL_MAX_RETRIES=3
 SOCKET_POOL_CONNECTION_TTL=300
 
 # Service paths (using project directory)
-SOCKET_POOL_UNIX_PATH=/var/run/socket_pool_service.sock
+SOCKET_POOL_UNIX_PATH=/var/run/socket-pool/socket_pool_service.sock
 SOCKET_POOL_LOG_FILE=$servicePath/logs/socket_pool_service.log
 
 # Logging configuration

@@ -67,7 +67,7 @@ class SocketPoolService
             'max_pool_size' => (int) ($_ENV['SOCKET_POOL_MAX_SIZE'] ?? 100),
             'connection_timeout' => (int) ($_ENV['SOCKET_POOL_TIMEOUT'] ?? 30),
             'max_retries' => (int) ($_ENV['SOCKET_POOL_MAX_RETRIES'] ?? 3),
-            'unix_socket_path' => $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/var/run/socket_pool_service.sock',
+            'unix_socket_path' => $_ENV['SOCKET_POOL_UNIX_PATH'] ?? '/var/run/socket-pool/socket_pool_service.sock',
             'log_level' => $_ENV['SOCKET_POOL_LOG_LEVEL'] ?? 'INFO',
             'log_file' => $_ENV['SOCKET_POOL_LOG_FILE'] ?? __DIR__ . '/../../logs/socket_pool_service.log',
             'redis_enabled' => filter_var($_ENV['SOCKET_POOL_REDIS_ENABLED'] ?? 'false', FILTER_VALIDATE_BOOLEAN),
