@@ -76,6 +76,7 @@ class SocketPoolService
             'redis_password' => $_ENV['REDIS_PASSWORD'] ?? null,
             'metrics_enabled' => filter_var($_ENV['SOCKET_POOL_METRICS_ENABLED'] ?? 'true', FILTER_VALIDATE_BOOLEAN),
             'health_check_interval' => (int) ($_ENV['SOCKET_POOL_HEALTH_INTERVAL'] ?? 60),
+            'ack_timeout_ms' => (int) ($_ENV['SOCKET_POOL_ACK_TIMEOUT_MS'] ?? 200),
         ];
 
         $this->unixSocketPath = $this->config['unix_socket_path'];
@@ -417,8 +418,10 @@ class SocketPoolService
            socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, [
             "sec" => $this->config['connection_timeout'], "usec" => 0
         ]);
+        // Short ACK timeout — GPS server responds in <1ms normally; 200ms is generous.
+        // SO_RCVTIMEO expiry returns EAGAIN, handled gracefully in sendMessage().
         socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, [
-            "sec" => $this->config['connection_timeout'], "usec" => 0
+            "sec" => 0, "usec" => $this->config['ack_timeout_ms'] * 1000
         ]);
 
         $retries = 0;
@@ -462,14 +465,30 @@ class SocketPoolService
             throw new ConnectionException('No bytes written to socket');
         }
 
-        // Read response
+        // Read ACK — short timeout (200ms) is set via SO_RCVTIMEO on this socket.
+        // EAGAIN (11) means the server sent no ACK within the window; the message
+        // was still delivered. Any other errno is a real connection failure.
         $response = socket_read($socket, 2048);
+        $ackReceived = true;
+
         if ($response === false) {
-            throw new ConnectionException('Failed to read from socket: ' . socket_strerror(socket_last_error($socket)));
+            $errno = socket_last_error($socket);
+            if ($errno === 11 || $errno === 10060) {
+                // EAGAIN / WSAETIMEDOUT — no ACK, but send succeeded
+                $this->logger->warning('GPS ACK not received within timeout', [
+                    'vehicle_id' => $vehicleId,
+                    'errno' => $errno,
+                ]);
+                $response = '';
+                $ackReceived = false;
+            } else {
+                throw new ConnectionException('Failed to read from socket: ' . socket_strerror($errno));
+            }
         }
 
         return [
             'success' => true,
+            'ack_received' => $ackReceived,
             'response' => $response,
             'hex_response' => bin2hex($response),
             'bytes_sent' => $bytesWritten,
